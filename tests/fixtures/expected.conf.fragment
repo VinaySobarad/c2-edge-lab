@@ -1,0 +1,15 @@
+map_hash_bucket_size 256;
+map $http_x_lab_token $c2e_header_ok
+"lab-test-token" 1
+map $http_user_agent $c2e_ua_class
+~*(curl|wget|nikto|nmap|masscan|sqlmap|python-requests|Go-http-client) scanner
+"Mozilla/5.0 (Windows NT 10.0; Win64; x64) LabCallback/1.0" allow
+"1:allow" proxy
+location /cdn/
+location @proxy
+location @decoy
+proxy_pass http://10.42.2.10:8080
+proxy_set_header Connection ""
+proxy_read_timeout 60s
+if ($c2e_gate = proxy) { return 418; }
+return 419

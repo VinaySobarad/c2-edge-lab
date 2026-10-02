@@ -1,0 +1,42 @@
+# Copy to lab.tfvars (never commit lab.tfvars).
+# Remote state: copy terraform/config.s3.tfbackend.example → terraform/config.s3.tfbackend (also gitignored).
+#
+# Hostname: leave both empty for https://dxxxx.cloudfront.net (no ACM, no Route 53).
+# Set BOTH to use a custom domain.
+domain_name    = ""
+hosted_zone_id = ""
+# domain_name    = "lab.example.com"
+# hosted_zone_id = "ZXXXXXXXX"
+
+# Regions. ACM for a CloudFront alias must be us-east-1 even if aws_region changes.
+aws_region = "us-east-1"
+acm_region = "us-east-1"
+
+# Network
+vpc_cidr            = "10.42.0.0/16"
+public_subnet_cidr  = "10.42.1.0/24"
+private_subnet_cidr = "10.42.2.0/24"
+# availability_zone = "us-east-1a"
+
+# Compute
+instance_type    = "t3.micro"
+root_volume_type = "gp3"
+root_volume_size = 8
+
+# CloudFront — two hostnames. Short-haul /cdn/* ; long-haul is a second distribution /lh/*.
+callback_path_patterns              = ["/cdn/*"]
+longhaul_path_patterns              = ["/lh/*"]
+cloudfront_minimum_protocol_version = "TLSv1.2_2021"
+# cloudfront_price_class            = "PriceClass_100"
+
+# Must match `make conf` (terraform/templates/redirector.conf.in).
+# 192.0.2.1 is RFC 5737 TEST-NET; Terraform replaces it with the teamserver private IP.
+nginx_backend_placeholder = "192.0.2.1"
+nginx_header_placeholder  = "PLACEHOLDERHEADER"
+
+# Must match policy/redirector.policy.yaml
+callback_header_name   = "X-Lab-Token"
+teamserver_listen_port = 8080
+
+# name_prefix         = "c2-edge"
+# decoy_force_destroy = true

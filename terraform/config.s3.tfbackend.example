@@ -1,0 +1,7 @@
+# Copy to config.s3.tfbackend (gitignored). Do not commit the real bucket name.
+# https://developer.hashicorp.com/terraform/language/backend
+# terraform init -backend-config=config.s3.tfbackend
+
+bucket = "YOUR-TERRAFORM-STATE-BUCKET"
+key    = "c2-edge-lab/terraform.tfstate"
+region = "us-east-1"

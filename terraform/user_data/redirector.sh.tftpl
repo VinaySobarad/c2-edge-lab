@@ -1,0 +1,29 @@
+#!/bin/bash
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+apt_retry() {
+  local attempt=1
+  until apt-get update -y && apt-get install -y nginx; do
+    if [ "$attempt" -ge 5 ]; then
+      return 1
+    fi
+    attempt=$((attempt + 1))
+    sleep 5
+  done
+}
+
+apt_retry
+
+install -d -m 0755 /var/www/html /etc/nginx/conf.d
+printf '%s\n' '${decoy_html_base64}' | base64 -d > /var/www/html/index.html
+chmod 0644 /var/www/html/index.html
+
+# Maps must live in http context. Ubuntu includes conf.d/*.conf from http {}.
+printf '%s\n' '${nginx_conf_base64}' | base64 -d > /etc/nginx/conf.d/redirector.conf
+chmod 0644 /etc/nginx/conf.d/redirector.conf
+rm -f /etc/nginx/sites-enabled/default
+
+nginx -t
+systemctl enable nginx
+systemctl restart nginx

@@ -1,0 +1,19 @@
+version: 1
+header:
+  name: X-Lab-Token
+  value: lab-test-token
+paths:
+  prefixes:
+    - /cdn/
+user_agents:
+  allow_exact:
+    - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) LabCallback/1.0"
+  allow_regex: []
+  scanner_substrings:
+    - curl
+backend:
+  port: 8080
+decoy:
+  root: /var/www/html
+  index: index.html
+unexpected_key: true

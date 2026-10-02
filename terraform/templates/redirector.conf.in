@@ -1,0 +1,56 @@
+map_hash_bucket_size 256;
+
+map $http_x_lab_token $c2e_header_ok {
+    default 0;
+    "PLACEHOLDERHEADER" 1;
+}
+
+map $http_user_agent $c2e_ua_class {
+    default other;
+    ~*(curl|wget|nikto|nmap|masscan|sqlmap|python-requests|Go-http-client) scanner;
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) LabCallback/1.0" allow;
+}
+
+map "$c2e_header_ok:$c2e_ua_class" $c2e_gate {
+    default decoy;
+    "1:allow" proxy;
+}
+
+server {
+    listen 80 default_server;
+    server_name _;
+    server_tokens off;
+    root /var/www/html;
+
+    location /cdn/ {
+        error_page 418 = @proxy;
+        error_page 419 = @decoy;
+        if ($c2e_gate = proxy) { return 418; }
+        return 419;
+    }
+
+    location /lh/ {
+        error_page 418 = @proxy;
+        error_page 419 = @decoy;
+        if ($c2e_gate = proxy) { return 418; }
+        return 419;
+    }
+
+    location / {
+        try_files /index.html =200;
+    }
+
+    location @proxy {
+        proxy_pass http://192.0.2.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Connection "";
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 60s;
+    }
+
+    location @decoy {
+        try_files /index.html =200;
+    }
+}

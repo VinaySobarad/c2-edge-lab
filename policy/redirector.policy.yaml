@@ -1,0 +1,26 @@
+version: 1
+header:
+  name: X-Lab-Token
+  value: ""
+paths:
+  prefixes:
+    - /cdn/
+    - /lh/
+user_agents:
+  allow_exact:
+    - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) LabCallback/1.0"
+  allow_regex: []
+  scanner_substrings:
+    - curl
+    - wget
+    - nikto
+    - nmap
+    - masscan
+    - sqlmap
+    - python-requests
+    - Go-http-client
+backend:
+  port: 8080
+decoy:
+  root: /var/www/html
+  index: index.html
