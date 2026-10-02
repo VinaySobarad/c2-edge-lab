@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.5 — 2026-10-02
+
+- README verify path uses `CLOUDFRONT_URL`, `PUBLIC_EC2_IP`, and `TEAMSERVER_IP` from Terraform outputs. Live hostnames, EIPs, and capture dates are not in git.
+
 ## 0.10.4 — 2026-10-02
 
 - README live proof: curl commands and captured CloudFront responses from the applied stack (S3 decoy vs nginx gate vs EIP timeout).

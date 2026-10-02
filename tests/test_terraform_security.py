@@ -89,6 +89,29 @@ def test_remote_state_bucket_is_not_in_git() -> None:
         assert leak not in text, f"state bucket leaked in {path.relative_to(root)}"
 
 
+def test_live_endpoints_are_not_in_git() -> None:
+    root = TERRAFORM.parent
+    needles = (
+        "d1vsta" + "cl4nmva3",
+        "d14y9e" + "g8om8j76",
+        "18.204.239." + "219",
+        "10.42.2." + "241",
+        "c2-edge-decoy-" + "21a3d3ab",
+        "MRS" + "53-P",
+        "i-0a777e04" + "aba994321",
+        "i-0ee8a54a" + "be738a5d0",
+    )
+    skip_dirs = {".venv", ".terraform", ".git", ".ruff_cache", ".pytest_cache"}
+    for path in root.rglob("*"):
+        if not path.is_file() or any(part in skip_dirs for part in path.parts):
+            continue
+        if path.suffix in {".pyc", ".png", ".svg", ".tfvars", ".tfbackend"}:
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for needle in needles:
+            assert needle not in text, f"live endpoint leaked in {path.relative_to(root)}"
+
+
 def test_cloudfront_split_origin_uses_managed_policies() -> None:
     cloudfront = _read("cloudfront.tf")
     terraform_text = "".join(path.read_text(encoding="utf-8") for path in TERRAFORM.glob("*.tf"))

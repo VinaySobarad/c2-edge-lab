@@ -4,21 +4,26 @@ Automated **C2 infrastructure** on AWS: two CloudFront hostnames (short-haul + l
 
 **Unique piece:** CloudFront splits origins — `/*` is a private S3 site (OAC); `/cdn/*` (short) and `/lh/*` (long, second `dxxxx`) are nginx. Burn the redirector (new VM + new EIP); keep the decoy. Burn the short-haul hostname separately; long-haul stays.
 
-Authorized lab only. You must own the AWS account. A custom domain is optional (this apply used none).
+Authorized lab only. You must own the AWS account. A custom domain is optional.
 
-## Live proof (captured 2026-10-02, us-east-1)
+## Verify after apply
 
-This is not a mock. These are HTTP responses from the applied stack. No custom domain — CloudFront default certs. The gate token is Terraform-generated (`random_password`); it is **not** in git. Load it, then repeat every curl:
+Hostnames, EIPs, and the gate token are Terraform outputs. They are **not** in git. Load them, then run the curls:
 
 ```bash
+CLOUDFRONT_URL="$(terraform -chdir=terraform output -raw decoy_url)"
+CLOUDFRONT_LONGHAUL_URL="$(terraform -chdir=terraform output -raw longhaul_url)"
+PUBLIC_EC2_IP="$(terraform -chdir=terraform output -raw redirector_eip)"
+TEAMSERVER_IP="$(terraform -chdir=terraform output -raw teamserver_private_ip)"
 TOKEN="$(terraform -chdir=terraform output -raw lab_header_value)"
 ```
 
-| Host | Role |
-|------|------|
-| `https://d1vstacl4nmva3.cloudfront.net` | short-haul (`/*` → S3, `/cdn/*` → nginx) |
-| `https://d14y9eg8om8j76.cloudfront.net` | long-haul (`/*` → S3, `/lh/*` → nginx) |
-| `http://18.204.239.219/` | redirector EIP — **must time out** from a laptop |
+| Variable | Role |
+|----------|------|
+| `CLOUDFRONT_URL` | short-haul (`/*` → S3, `/cdn/*` → nginx) |
+| `CLOUDFRONT_LONGHAUL_URL` | long-haul (`/*` → S3, `/lh/*` → nginx) |
+| `PUBLIC_EC2_IP` | redirector EIP — **must time out** from a laptop |
+| `TEAMSERVER_IP` | private teamserver; nginx origin, not on the internet |
 
 What to look at so this cannot be waved off as “just a static site”:
 
@@ -61,7 +66,7 @@ Decoy HTML (704 bytes) returned by every failed check below:
 ### 1. Short-haul decoy (humans, `/`) — S3
 
 ```bash
-curl -sS -D - https://d1vstacl4nmva3.cloudfront.net/
+curl -sS -D - "$CLOUDFRONT_URL"
 ```
 
 ```
@@ -69,9 +74,9 @@ HTTP/2 200
 content-type: text/html; charset=utf-8
 content-length: 704
 x-cache: RefreshHit from cloudfront
-via: 1.1 4a557a877fe1a4451716e444419fc1c4.cloudfront.net (CloudFront)
-x-amz-cf-pop: MRS53-P1
-x-amz-cf-id: dDjeiYYPWQ5DPt3S1zaN8McGpoIXEqDNVIm1HG8QXgdIbVISv5cJJw==
+via: 1.1 <edge>.cloudfront.net (CloudFront)
+x-amz-cf-pop: <POP>
+x-amz-cf-id: <id>
 ```
 
 Body: the 704-byte Northline HTML above. No `server: nginx`.
@@ -81,7 +86,7 @@ Body: the 704-byte Northline HTML above. No `server: nginx`.
 ```bash
 curl -sS -D - \
   -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) LabCallback/1.0' \
-  https://d1vstacl4nmva3.cloudfront.net/cdn/probe
+  "${CLOUDFRONT_URL%/}/cdn/probe"
 ```
 
 ```
@@ -90,9 +95,9 @@ content-type: text/html
 content-length: 704
 server: nginx
 x-cache: Miss from cloudfront
-via: 1.1 16136552230b5d7dcae2504c6eecea40.cloudfront.net (CloudFront)
-x-amz-cf-pop: MRS53-P1
-x-amz-cf-id: ZmEwj4EoGwIFminPwxUIp8mpJAnq6aUhvhvau-F0N1AhI4maNfxtpQ==
+via: 1.1 <edge>.cloudfront.net (CloudFront)
+x-amz-cf-pop: <POP>
+x-amz-cf-id: <id>
 ```
 
 Body: same 704-byte Northline HTML. Not `teamserver-ok`.
@@ -103,7 +108,7 @@ Body: same 704-byte Northline HTML. Not `teamserver-ok`.
 curl -sS -D - \
   -A 'curl/8.4.0' \
   -H "X-Lab-Token: $TOKEN" \
-  https://d1vstacl4nmva3.cloudfront.net/cdn/probe
+  "${CLOUDFRONT_URL%/}/cdn/probe"
 ```
 
 ```
@@ -111,9 +116,9 @@ HTTP/2 200
 content-type: text/html
 content-length: 704
 x-cache: Miss from cloudfront
-via: 1.1 a086291fc98fe2c3c8ffa16f08a29196.cloudfront.net (CloudFront)
-x-amz-cf-pop: MRS53-P1
-x-amz-cf-id: _pgEchg4BUqUULTQr4-VaVURiIfYxy643Pj4af5wxFBdLHwi8OWJXQ==
+via: 1.1 <edge>.cloudfront.net (CloudFront)
+x-amz-cf-pop: <POP>
+x-amz-cf-id: <id>
 ```
 
 Body: same 704-byte Northline HTML. Not `teamserver-ok`.
@@ -124,7 +129,7 @@ Body: same 704-byte Northline HTML. Not `teamserver-ok`.
 curl -sS -D - \
   -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) LabCallback/1.0' \
   -H "X-Lab-Token: $TOKEN" \
-  https://d1vstacl4nmva3.cloudfront.net/cdn/probe
+  "${CLOUDFRONT_URL%/}/cdn/probe"
 ```
 
 ```
@@ -132,9 +137,9 @@ HTTP/2 200
 content-type: text/plain; charset=utf-8
 content-length: 13
 x-cache: Miss from cloudfront
-via: 1.1 bef918445c49bf6d036d07d855e42cd8.cloudfront.net (CloudFront)
-x-amz-cf-pop: MRS53-P1
-x-amz-cf-id: 7Z-RQKTeMhE6ntlLoVGyDa8zbq3-5t2rkq0vGcqX7nDmj9nnVe3XRg==
+via: 1.1 <edge>.cloudfront.net (CloudFront)
+x-amz-cf-pop: <POP>
+x-amz-cf-id: <id>
 
 teamserver-ok
 ```
@@ -142,7 +147,7 @@ teamserver-ok
 ### 5. Long-haul decoy (humans, `/`) — S3 on the second hostname
 
 ```bash
-curl -sS -D - https://d14y9eg8om8j76.cloudfront.net/
+curl -sS -D - "$CLOUDFRONT_LONGHAUL_URL"
 ```
 
 ```
@@ -150,9 +155,9 @@ HTTP/2 200
 content-type: text/html; charset=utf-8
 content-length: 704
 x-cache: RefreshHit from cloudfront
-via: 1.1 3726e5dc91f0cf8028318566f219a798.cloudfront.net (CloudFront)
-x-amz-cf-pop: MRS53-P5
-x-amz-cf-id: NXxryvZ7ZNQgzIBIKwOpFFnvg8R1vsT8EcqBC6msvb4SCSF4j5oEyQ==
+via: 1.1 <edge>.cloudfront.net (CloudFront)
+x-amz-cf-pop: <POP>
+x-amz-cf-id: <id>
 ```
 
 Body: same 704-byte Northline HTML. No `server: nginx`.
@@ -162,7 +167,7 @@ Body: same 704-byte Northline HTML. No `server: nginx`.
 ```bash
 curl -sS -D - \
   -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) LabCallback/1.0' \
-  https://d14y9eg8om8j76.cloudfront.net/lh/probe
+  "${CLOUDFRONT_LONGHAUL_URL%/}/lh/probe"
 ```
 
 ```
@@ -170,9 +175,9 @@ HTTP/2 200
 content-type: text/html
 content-length: 704
 x-cache: Miss from cloudfront
-via: 1.1 f463d0c5dc2e61d841364e69df14fc36.cloudfront.net (CloudFront)
-x-amz-cf-pop: MRS53-P5
-x-amz-cf-id: wk927VCpBzh1ip79Udq7ZbKk3BQ5MvfMzKvOdyseuKb9Omiv2XoN5Q==
+via: 1.1 <edge>.cloudfront.net (CloudFront)
+x-amz-cf-pop: <POP>
+x-amz-cf-id: <id>
 ```
 
 Body: same 704-byte Northline HTML. Not `teamserver-ok`.
@@ -183,7 +188,7 @@ Body: same 704-byte Northline HTML. Not `teamserver-ok`.
 curl -sS -D - \
   -A 'curl/8.4.0' \
   -H "X-Lab-Token: $TOKEN" \
-  https://d14y9eg8om8j76.cloudfront.net/lh/probe
+  "${CLOUDFRONT_LONGHAUL_URL%/}/lh/probe"
 ```
 
 ```
@@ -192,9 +197,9 @@ content-type: text/html
 content-length: 704
 server: nginx
 x-cache: Miss from cloudfront
-via: 1.1 c18ffd9a229be0230ca9639a3d559908.cloudfront.net (CloudFront)
-x-amz-cf-pop: MRS53-P5
-x-amz-cf-id: 7yBtHAn6PKS8rR_ZNzNVnycta_iIzaqwF9FZqsQT9lxXrHAc9YXiIA==
+via: 1.1 <edge>.cloudfront.net (CloudFront)
+x-amz-cf-pop: <POP>
+x-amz-cf-id: <id>
 ```
 
 Body: same 704-byte Northline HTML. Not `teamserver-ok`.
@@ -205,7 +210,7 @@ Body: same 704-byte Northline HTML. Not `teamserver-ok`.
 curl -sS -D - \
   -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) LabCallback/1.0' \
   -H "X-Lab-Token: $TOKEN" \
-  https://d14y9eg8om8j76.cloudfront.net/lh/probe
+  "${CLOUDFRONT_LONGHAUL_URL%/}/lh/probe"
 ```
 
 ```
@@ -213,9 +218,9 @@ HTTP/2 200
 content-type: text/plain; charset=utf-8
 content-length: 13
 x-cache: Miss from cloudfront
-via: 1.1 640a856b566da74d5447e09aec6b699e.cloudfront.net (CloudFront)
-x-amz-cf-pop: MRS53-P5
-x-amz-cf-id: 2SkpXiH2rHUS_GkGWGKeTXQcj0fqgOzEaj1db-HPr7RT-bCtsLxTIw==
+via: 1.1 <edge>.cloudfront.net (CloudFront)
+x-amz-cf-pop: <POP>
+x-amz-cf-id: <id>
 
 teamserver-ok
 ```
@@ -225,8 +230,8 @@ teamserver-ok
 OAC can read decoy object keys only. `stage/*` is denied.
 
 ```bash
-curl -sS -D - https://d1vstacl4nmva3.cloudfront.net/stage/sliver-server
-curl -sS -D - https://d14y9eg8om8j76.cloudfront.net/stage/sliver-server
+curl -sS -D - "${CLOUDFRONT_URL%/}/stage/sliver-server"
+curl -sS -D - "${CLOUDFRONT_LONGHAUL_URL%/}/stage/sliver-server"
 ```
 
 ```
@@ -234,20 +239,20 @@ HTTP/2 403
 content-type: application/xml
 server: AmazonS3
 x-cache: Error from cloudfront
-via: 1.1 4a557a877fe1a4451716e444419fc1c4.cloudfront.net (CloudFront)
-x-amz-cf-pop: MRS53-P1
-x-amz-cf-id: YKDp05zcV_HQHfjJ3fINdBoxaJKpnhP9bZ5ntHQd9_TbkXhbAvT2eQ==
+via: 1.1 <edge>.cloudfront.net (CloudFront)
+x-amz-cf-pop: <POP>
+x-amz-cf-id: <id>
 
 <?xml version="1.0" encoding="UTF-8"?>
 <Error><Code>AccessDenied</Code><Message>Access Denied</Message></Error>
 ```
 
-Long-haul: same **403** `AccessDenied` (`x-amz-cf-id: AdAPJmM_WLQ5vL0kYXgywy-L3pboBtXeE96Gsv_BfneIWygg2mtpIQ==`).
+Long-haul: same **403** `AccessDenied`.
 
 ### 10. Laptop → redirector EIP (must not serve)
 
 ```bash
-curl -sS --max-time 8 http://18.204.239.219/
+curl -sS --max-time 8 "http://${PUBLIC_EC2_IP}/"
 ```
 
 ```
@@ -282,7 +287,7 @@ verify ok
 
 ## Status
 
-Applied in this account (2026-10-02). Proof above. Reproduce with the curls or `make lab-verify`. `make decoy-up` / `make burn-redirector` still **refuse** to apply — you run `terraform apply` yourself.
+After apply, load `CLOUDFRONT_URL` / `PUBLIC_EC2_IP` / `TEAMSERVER_IP` from Terraform outputs and run the curls or `make lab-verify`. `make decoy-up` / `make burn-redirector` still **refuse** to apply — you run `terraform apply` yourself.
 
 State is remote S3 (bucket name in gitignored `terraform/config.s3.tfbackend`). CI still runs `terraform init -backend=false`.
 
